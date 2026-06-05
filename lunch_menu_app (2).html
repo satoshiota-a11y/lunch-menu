@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>お昼の献立表 作成アプリ</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f3ee;
+    --surface: #ffffff;
+    --surface2: #faf9f6;
+    --border: #e2ddd6;
+    --text: #2a2520;
+    --text2: #7a736a;
+    --text3: #b0a89e;
+    --accent: #c85a2a;
+    --accent-light: #fdf0ea;
+    --green: #2d7a4f;
+    --green-light: #eaf5ef;
+    --red: #b0362a;
+    --red-light: #fdf0ee;
+    --radius: 10px;
+    --shadow: 0 2px 12px rgba(0,0,0,0.07);
+  }
+  body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 2rem 1rem; }
+  .app-header { text-align: center; margin-bottom: 2rem; }
+  .app-header h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.02em; }
+  .app-header p { font-size: 13px; color: var(--text2); margin-top: 6px; }
+
+  .section {
+    max-width: 640px; margin: 0 auto 1.2rem;
+    background: var(--surface); border-radius: var(--radius);
+    border: 1px solid var(--border); padding: 1.5rem; box-shadow: var(--shadow);
+  }
+  .section h2 { font-size: 15px; font-weight: 700; margin-bottom: 1rem; color: var(--text); }
+  .section-note { font-size: 12px; color: var(--text2); margin-bottom: 1rem; line-height: 1.6; }
+
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1rem; }
+  .upload-box {
+    border: 2px dashed var(--border); border-radius: var(--radius);
+    padding: 1.2rem; text-align: center; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: var(--surface2); position: relative;
+  }
+  .upload-box:hover { border-color: var(--accent); background: var(--accent-light); }
+  .upload-box.loaded { border-color: var(--green); background: var(--green-light); border-style: solid; }
+  .upload-box input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-icon { font-size: 28px; margin-bottom: 6px; }
+  .upload-label { font-size: 13px; font-weight: 500; color: var(--text2); }
+  .upload-box.loaded .upload-label { color: var(--green); }
+  .upload-filename { font-size: 11px; color: var(--text3); margin-top: 4px; word-break: break-all; }
+
+  .year-month-row { display: flex; gap: 10px; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+  .year-month-row label { font-size: 13px; color: var(--text2); }
+  .year-month-row input, .year-month-row select {
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; font-size: 14px; font-family: inherit;
+    background: var(--surface); color: var(--text); width: 90px;
+  }
+
+  /* Holiday picker mini-calendar */
+  .holiday-cal { margin-top: 0.5rem; }
+  .hcal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .hcal-month-label { font-size: 13px; font-weight: 500; }
+  .hcal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .hcal-dow { text-align: center; font-size: 10px; color: var(--text3); padding: 2px 0; }
+  .hcal-dow.sun { color: #c0392b; }
+  .hcal-dow.sat { color: #2471a3; }
+  .hcal-day {
+    text-align: center; font-size: 12px; padding: 5px 2px;
+    border-radius: 6px; cursor: pointer; user-select: none;
+    transition: background 0.15s;
+    border: 1px solid transparent;
+  }
+  .hcal-day:hover:not(.inactive):not(.weekend):not(.auto-holiday) { background: var(--accent-light); border-color: var(--accent); }
+  .hcal-day.inactive { color: var(--text3); cursor: default; }
+  .hcal-day.weekend { color: var(--text3); cursor: default; font-style: italic; }
+  .hcal-day.auto-holiday {
+    background: #fef3cd; color: #856404;
+    border-color: #ffc107; cursor: default; font-weight: 500;
+  }
+  .hcal-day.auto-holiday::after { content: ''; display: block; font-size: 8px; }
+  .hcal-day.custom-off {
+    background: var(--red-light) !important; color: var(--red) !important;
+    border-color: var(--red) !important; font-weight: 700;
+  }
+  .holiday-legend { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text2); }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; border: 1px solid; }
+  .legend-dot.holiday { background: #fef3cd; border-color: #ffc107; }
+  .legend-dot.custom { background: var(--red-light); border-color: var(--red); }
+
+  .selected-days { margin-top: 10px; font-size: 12px; color: var(--red); min-height: 18px; }
+
+  .generate-btn {
+    width: 100%; padding: 12px; background: var(--accent); color: #fff;
+    border: none; border-radius: var(--radius); font-size: 15px; font-weight: 700;
+    font-family: inherit; cursor: pointer; transition: opacity 0.2s; letter-spacing: 0.04em;
+  }
+  .generate-btn:hover { opacity: 0.88; }
+  .generate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .status { max-width: 640px; margin: 0 auto 1.5rem; font-size: 13px; color: var(--text2); text-align: center; min-height: 24px; }
+  .status.error { color: #c0392b; }
+  .progress-wrap { max-width: 640px; margin: 0 auto 1.5rem; display: none; }
+  .progress-wrap.show { display: block; }
+  .progress-bar { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 99px; width: 0%; transition: width 0.4s ease; }
+
+  #result-area { display: none; }
+  #result-area.show { display: block; }
+  .result-toolbar { max-width: 900px; margin: 0 auto 1rem; display: flex; justify-content: space-between; align-items: center; }
+  .result-title { font-size: 17px; font-weight: 700; }
+  .print-btn {
+    padding: 8px 20px; background: var(--text); color: #fff; border: none;
+    border-radius: 6px; font-size: 13px; font-weight: 500; font-family: inherit;
+    cursor: pointer; transition: opacity 0.2s; display: flex; align-items: center; gap: 6px;
+  }
+  .print-btn:hover { opacity: 0.8; }
+
+  .calendar-wrap {
+    max-width: 900px; margin: 0 auto; background: var(--surface);
+    border-radius: var(--radius); border: 1px solid var(--border);
+    padding: 1.5rem; box-shadow: var(--shadow);
+  }
+  .cal-title { font-size: 18px; font-weight: 700; margin-bottom: 0.4rem; }
+  .cal-note { font-size: 11px; color: var(--text3); margin-bottom: 1.2rem; }
+  .header-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 6px; margin-bottom: 6px; }
+  .header-cell { text-align: center; font-size: 12px; font-weight: 500; color: var(--text2); padding: 4px 0; }
+  .week-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 6px; margin-bottom: 6px; }
+  .day-card { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; min-height: 100px; background: var(--surface); }
+  .day-card.empty { background: var(--surface2); border-color: transparent; }
+  .day-card.off-day { background: #fafafa; border-color: #eee; }
+  .day-head { display: flex; align-items: baseline; gap: 4px; margin-bottom: 6px; }
+  .day-num { font-size: 17px; font-weight: 700; line-height: 1; }
+  .day-dow { font-size: 10px; color: var(--text3); }
+  .off-badge {
+    display: inline-block; font-size: 10px; padding: 2px 7px;
+    border-radius: 99px; font-weight: 700; margin-bottom: 4px;
+  }
+  .off-badge.holiday { background: #fef3cd; color: #856404; }
+  .off-badge.custom { background: var(--red-light); color: var(--red); }
+  .menu-main { font-size: 11.5px; font-weight: 700; color: var(--accent); line-height: 1.5; margin-bottom: 3px; }
+  .menu-sub { font-size: 10.5px; color: var(--text2); line-height: 1.6; }
+  .menu-kcal { font-size: 10px; color: var(--text3); margin-top: 5px; }
+
+  @media print {
+    body { background: #fff; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .section, .status, .progress-wrap, .result-toolbar, .app-header { display: none !important; }
+    #result-area { display: block !important; }
+    .calendar-wrap { box-shadow: none; border: none; padding: 0.5cm; max-width: 100%; margin: 0; }
+    .day-card { page-break-inside: avoid; min-height: 80px; }
+    .week-row { gap: 4px; margin-bottom: 4px; }
+    .header-row { gap: 4px; }
+    .menu-main { font-size: 9.5px; }
+    .menu-sub { font-size: 9px; }
+    .menu-kcal { font-size: 8.5px; }
+    .day-num { font-size: 14px; }
+    .cal-title { font-size: 15px; margin-bottom: 6px; }
+    @page { size: A4 landscape; margin: 1cm; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>🍱 お昼の献立表 作成アプリ</h1>
+  <p>前半・後半のPDFをアップロードすると、月〜金のお昼メニュー一覧を自動作成します</p>
+</div>
+
+<!-- STEP 1: PDF Upload -->
+<div class="section">
+  <h2>① PDFをアップロード &amp; 年月を選択</h2>
+  <div class="upload-grid">
+    <div class="upload-box" id="box1">
+      <input type="file" accept=".pdf" id="file1" onchange="handleFile(1, this)">
+      <div class="upload-icon">📄</div>
+      <div class="upload-label">前半（1〜15日頃）</div>
+      <div class="upload-filename" id="name1">クリックして選択</div>
+    </div>
+    <div class="upload-box" id="box2">
+      <input type="file" accept=".pdf" id="file2" onchange="handleFile(2, this)">
+      <div class="upload-icon">📄</div>
+      <div class="upload-label">後半（16〜末日頃）</div>
+      <div class="upload-filename" id="name2">クリックして選択</div>
+    </div>
+  </div>
+  <div class="year-month-row">
+    <label>年</label>
+    <input type="number" id="input-year" value="" placeholder="2026" min="2020" max="2040" onchange="refreshCal()">
+    <label>月</label>
+    <select id="input-month" onchange="refreshCal()">
+      <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+      <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+      <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+      <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+    </select>
+  </div>
+</div>
+
+<!-- STEP 2: Holiday / Off day picker -->
+<div class="section">
+  <h2>② 休日・特別休業日を設定</h2>
+  <p class="section-note">
+    🔴 キッズアカデミーの休園日は、クリックして献立を非表示にできます。
+  </p>
+  <div class="holiday-cal" id="holiday-cal"></div>
+  <div class="holiday-legend">
+    <div class="legend-item"><div class="legend-dot holiday"></div>祝日（自動）</div>
+    <div class="legend-item"><div class="legend-dot custom"></div>特別休業日（手動）</div>
+  </div>
+  <div class="selected-days" id="selected-days-label"></div>
+</div>
+
+<!-- STEP 3: Generate -->
+<div class="section">
+  <h2>③ 献立表を作成</h2>
+  <button class="generate-btn" id="gen-btn" onclick="generate()" disabled>献立表を作成する</button>
+</div>
+
+<div class="progress-wrap" id="prog-wrap">
+  <div class="progress-bar"><div class="progress-fill" id="prog-fill"></div></div>
+</div>
+<div class="status" id="status-msg"></div>
+
+<div id="result-area">
+  <div class="result-toolbar">
+    <div class="result-title" id="result-title"></div>
+    <button class="print-btn" onclick="window.print()">🖨️ 印刷する（A4横）</button>
+  </div>
+  <div class="calendar-wrap">
+    <div class="cal-title" id="cal-title"></div>
+    <div class="cal-note">※ご飯130gを含むカロリー表示　／　月〜金のお昼のみ抜粋　／　🎌祝日・休業日はお休み</div>
+    <div class="header-row">
+      <div class="header-cell">月</div><div class="header-cell">火</div><div class="header-cell">水</div>
+      <div class="header-cell">木</div><div class="header-cell">金</div>
+    </div>
+    <div id="cal-body"></div>
+  </div>
+</div>
+
+<script>
+const DOW = ['日','月','火','水','木','金','土'];
+let files = {1:null, 2:null};
+let customOffDays = new Set();   // user-selected special holidays
+let autoHolidays = {};           // { "YYYY-M-D": "祝日名" }
+
+// ── Japanese public holidays (fixed & formula-based) ──
+function getJapaneseHolidays(year, month) {
+  const h = {};
+  const add = (m, d, name) => { if (m === month) h[d] = name; };
+
+  // Fixed holidays
+  add(1,  1,  '元日');
+  add(2,  11, '建国記念の日');
+  add(2,  23, '天皇誕生日');
+  add(4,  29, '昭和の日');
+  add(5,  3,  '憲法記念日');
+  add(5,  4,  'みどりの日');
+  add(5,  5,  'こどもの日');
+  add(8,  11, '山の日');
+  add(11, 3,  '文化の日');
+  add(11, 23, '勤労感謝の日');
+
+  // Happy Monday holidays (nth Monday)
+  const nthMon = (m, n) => {
+    let count = 0;
+    for (let d = 1; d <= 31; d++) {
+      const dt = new Date(year, m-1, d);
+      if (dt.getMonth() !== m-1) break;
+      if (dt.getDay() === 1) { count++; if (count === n) return d; }
+    }
+    return null;
+  };
+  const d1 = nthMon(1, 2); if (d1 && month===1) h[d1] = '成人の日';
+  const d2 = nthMon(7, 3); if (d2 && month===7) h[d2] = '海の日';
+  const d3 = nthMon(9, 3); if (d3 && month===9) h[d3] = '敬老の日';
+  const d4 = nthMon(10,2); if (d4 && month===10) h[d4] = 'スポーツの日';
+
+  // Spring equinox (approx)
+  if (month === 3) {
+    const eq = Math.floor(20.8431 + 0.242194*(year-1980) - Math.floor((year-1980)/4));
+    h[eq] = '春分の日';
+  }
+  // Autumn equinox (approx)
+  if (month === 9) {
+    const eq = Math.floor(23.2488 + 0.242194*(year-1980) - Math.floor((year-1980)/4));
+    h[eq] = '秋分の日';
+  }
+
+  // Substitute holiday: if holiday falls on Sunday, next Monday is substitute
+  const keys = Object.keys(h).map(Number);
+  keys.forEach(d => {
+    const dow = new Date(year, month-1, d).getDay();
+    if (dow === 0) {
+      let sub = d + 1;
+      while (h[sub]) sub++;
+      if (new Date(year, month-1, sub).getMonth() === month-1) h[sub] = '振替休日';
+    }
+  });
+
+  return h;
+}
+
+function getYM() {
+  return {
+    year: parseInt(document.getElementById('input-year').value) || new Date().getFullYear(),
+    month: parseInt(document.getElementById('input-month').value) || (new Date().getMonth()+1)
+  };
+}
+
+function refreshCal() {
+  const {year, month} = getYM();
+  autoHolidays = getJapaneseHolidays(year, month);
+  renderHolidayCal(year, month);
+  updateSelectedLabel();
+}
+
+function renderHolidayCal(year, month) {
+  const container = document.getElementById('holiday-cal');
+  const lastDate = new Date(year, month, 0).getDate();
+  const firstDow = new Date(year, month-1, 1).getDay(); // 0=Sun
+
+  let html = `<div class="hcal-grid">`;
+  // Monday-start: Mon〜Sun
+  const dowLabels = ['月','火','水','木','金','土','日'];
+  dowLabels.forEach((d,i) => {
+    html += `<div class="hcal-dow ${i===5?'sat':i===6?'sun':''}">${d}</div>`;
+  });
+
+  // blank cells before 1st (Monday=0 offset)
+  const monOffset = (firstDow === 0) ? 6 : firstDow - 1;
+  for (let i=0; i<monOffset; i++) html += `<div class="hcal-day inactive"></div>`;
+
+  for (let d=1; d<=lastDate; d++) {
+    const dow = new Date(year, month-1, d).getDay();
+    const isWeekend = dow===0 || dow===6;
+    const isAutoH = !!autoHolidays[d];
+    const isCustom = customOffDays.has(d);
+    let cls = 'hcal-day';
+    let title = '';
+    if (isWeekend) { cls += ' weekend'; }
+    else if (isAutoH) { cls += ' auto-holiday'; title = autoHolidays[d]; }
+    else if (isCustom) { cls += ' custom-off'; }
+    const onclick = (!isWeekend && !isAutoH) ? `onclick="toggleCustomOff(${d})"` : '';
+    const tooltip = title ? `title="${title}"` : '';
+    html += `<div class="${cls}" ${onclick} ${tooltip} id="hday-${d}">${d}</div>`;
+  }
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+function toggleCustomOff(d) {
+  if (customOffDays.has(d)) {
+    customOffDays.delete(d);
+  } else {
+    customOffDays.add(d);
+  }
+  const el = document.getElementById('hday-' + d);
+  if (el) el.classList.toggle('custom-off');
+  updateSelectedLabel();
+}
+
+function updateSelectedLabel() {
+  const {year, month} = getYM();
+  const el = document.getElementById('selected-days-label');
+  const autoList = Object.entries(autoHolidays).map(([d,n]) => `${month}/${d}（${n}）`);
+  const customList = [...customOffDays].sort((a,b)=>a-b).map(d => `${month}/${d}`);
+  let parts = [];
+  if (autoList.length) parts.push('祝日：' + autoList.join('、'));
+  if (customList.length) parts.push('特別休業日：' + customList.join('、'));
+  el.textContent = parts.length ? parts.join('　') : '特別休業日は設定されていません';
+}
+
+// ── File handling ──
+function handleFile(n, input) {
+  const f = input.files[0];
+  if (!f) return;
+  files[n] = f;
+  document.getElementById('name'+n).textContent = f.name;
+  document.getElementById('box'+n).classList.add('loaded');
+  document.getElementById('box'+n).querySelector('.upload-icon').textContent = '✅';
+  checkReady();
+}
+function checkReady() {
+  document.getElementById('gen-btn').disabled = !(files[1] && files[2]);
+}
+function setProgress(p) { document.getElementById('prog-fill').style.width = p+'%'; }
+function setStatus(msg, isError) {
+  const el = document.getElementById('status-msg');
+  el.textContent = msg;
+  el.className = 'status' + (isError?' error':'');
+}
+async function fileToBase64(file) {
+  return new Promise((res,rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = () => rej(new Error('読み込み失敗'));
+    r.readAsDataURL(file);
+  });
+}
+
+// ── Claude API call ──
+async function callClaude(b1, b2, year, month) {
+  const allOff = {
+    ...Object.fromEntries(Object.entries(autoHolidays).map(([d,n]) => [Number(d), n])),
+    ...Object.fromEntries([...customOffDays].map(d => [d, '特別休業日']))
+  };
+  const offStr = Object.entries(allOff).sort((a,b)=>a[0]-b[0])
+    .map(([d,n]) => `${month}月${d}日（${n}）`).join('、') || 'なし';
+
+  const prompt = `以下は給食・配食サービスの献立表PDFです。前半と後半の2枚があります。
+この2枚から「月曜日〜金曜日の昼食メニューのみ」を全て抽出してください。
+
+${year}年${month}月のカレンダーで、月曜〜金曜にあたる日付のお昼メニューを抜き出してください。
+ただし以下の日はお休みなので除外してください：${offStr}
+
+必ず以下のJSON形式のみで返してください。前後に説明文や\`\`\`は不要です。
+
+{"menus":[{"date":1,"main":"メイン料理名","sides":["副菜1","副菜2"],"kcal":"311kcal","salt":"1.3g"}]}
+
+注意：
+- 昼食のみ（夕食は除く）
+- 土曜・日曜・上記の休日は含めない
+- メイン料理は1つ目のおかず
+- sidesは残りの副菜をすべて配列で
+- kcalと塩分が記載されていない場合は空文字
+- dateは日付の数字のみ`;
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4000,
+      messages: [{role:'user', content:[
+        {type:'document', source:{type:'base64', media_type:'application/pdf', data:b1}},
+        {type:'document', source:{type:'base64', media_type:'application/pdf', data:b2}},
+        {type:'text', text:prompt}
+      ]}]
+    })
+  });
+  if (!resp.ok) { const e = await resp.json().catch(()=>({})); throw new Error(e.error?.message||'APIエラー'); }
+  const data = await resp.json();
+  const text = data.content.map(c=>c.text||'').join('');
+  const clean = text.replace(/```json|```/g,'').trim();
+  return JSON.parse(clean);
+}
+
+// ── Main generate ──
+async function generate() {
+  const {year, month} = getYM();
+  if (!year||!month) { setStatus('年月を入力してください',true); return; }
+  document.getElementById('gen-btn').disabled = true;
+  document.getElementById('result-area').classList.remove('show');
+  document.getElementById('prog-wrap').classList.add('show');
+  setProgress(10); setStatus('PDFを読み込み中...');
+  try {
+    const [b1,b2] = await Promise.all([fileToBase64(files[1]), fileToBase64(files[2])]);
+    setProgress(30); setStatus('AIがメニューを解析中... しばらくお待ちください');
+    const result = await callClaude(b1, b2, year, month);
+    setProgress(90); setStatus('献立表を生成中...');
+    renderCalendar(result.menus, year, month);
+    setProgress(100); setStatus('');
+    document.getElementById('result-area').classList.add('show');
+    document.getElementById('result-area').scrollIntoView({behavior:'smooth'});
+  } catch(e) {
+    setStatus('エラー: '+e.message, true);
+    console.error(e);
+  } finally {
+    document.getElementById('gen-btn').disabled = false;
+    setTimeout(()=>{ document.getElementById('prog-wrap').classList.remove('show'); setProgress(0); }, 800);
+  }
+}
+
+// ── Render calendar ──
+function renderCalendar(menus, year, month) {
+  const menuMap = {};
+  menus.forEach(m => { menuMap[m.date] = m; });
+
+  const allOff = {
+    ...Object.fromEntries(Object.entries(autoHolidays).map(([d,n])=>[Number(d),n])),
+    ...Object.fromEntries([...customOffDays].map(d=>[d,'特別休業日']))
+  };
+
+  const firstDay = new Date(year, month-1, 1).getDay();
+  const lastDate = new Date(year, month, 0).getDate();
+  const startOffset = (firstDay===0) ? 6 : firstDay-1;
+
+  document.getElementById('cal-title').textContent = `${year}年${month}月　お昼の献立`;
+  document.getElementById('result-title').textContent = `${year}年${month}月 献立表`;
+
+  const body = document.getElementById('cal-body');
+  body.innerHTML = '';
+  let ptr = 1 - startOffset;
+
+  while (ptr <= lastDate) {
+    const row = document.createElement('div');
+    row.className = 'week-row';
+    for (let col=0; col<5; col++) {
+      const realDay = ptr + col;
+      const card = document.createElement('div');
+      if (realDay < 1 || realDay > lastDate) {
+        card.className = 'day-card empty';
+      } else {
+        const dow = new Date(year, month-1, realDay).getDay();
+        const expectedDow = col + 1;
+        if (dow !== expectedDow) {
+          card.className = 'day-card empty';
+        } else {
+          const offName = allOff[realDay];
+          const isAutoH = !!autoHolidays[realDay];
+          const isCustom = customOffDays.has(realDay);
+          if (offName) {
+            card.className = 'day-card off-day';
+            const badgeCls = isAutoH ? 'holiday' : 'custom';
+            card.innerHTML = `
+              <div class="day-head">
+                <span class="day-num">${realDay}</span>
+                <span class="day-dow">${DOW[dow]}</span>
+              </div>
+              <span class="off-badge ${badgeCls}">${offName}</span>`;
+          } else {
+            card.className = 'day-card';
+            const m = menuMap[realDay];
+            card.innerHTML = `
+              <div class="day-head">
+                <span class="day-num">${realDay}</span>
+                <span class="day-dow">${DOW[dow]}</span>
+              </div>
+              ${m ? `
+                <div class="menu-main">${m.main||''}</div>
+                <div class="menu-sub">${(m.sides||[]).join('／')}</div>
+                ${m.kcal||m.salt ? `<div class="menu-kcal">${m.kcal}　塩分${m.salt}</div>` : ''}
+              ` : '<div class="menu-sub" style="color:#ccc">データなし</div>'}`;
+          }
+        }
+      }
+      row.appendChild(card);
+    }
+    body.appendChild(row);
+    ptr += 7;
+  }
+}
+
+// ── Init ──
+const now = new Date();
+document.getElementById('input-year').value = now.getFullYear();
+document.getElementById('input-month').value = now.getMonth()+1;
+refreshCal();
+</script>
+</body>
+</html>
